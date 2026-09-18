@@ -141,3 +141,11 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Vercel
+.vercel
+
+# SIL-internal raw data exports (see scripts/import-font-stats.mjs)
+input/*.xlsx
+input/fonts/*.csv
+.env*
