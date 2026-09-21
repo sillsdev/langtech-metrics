@@ -76,22 +76,23 @@ details.
 
 ## Deploying
 
-Deploys run via GitHub Actions (`.github/workflows/deploy.yml`) on every push to
-`main`, using the Vercel CLI with a token rather than Vercel's GitHub App/dashboard
-import — that import flow isn't available without a paid plan for this repo's org.
+Vercel's own GitHub integration deploys every push to `main` automatically —
+`vercel link` (the one-time setup below) connects the repo to the project, so no
+GitHub Actions workflow is needed for this. (An earlier attempt built a custom
+Action around the Vercel CLI, on the assumption that Vercel's dashboard import
+flow needed a paid plan; that assumption turned out to only apply to the
+dashboard's own "Import Git Repository" click-through, not to the native
+integration once the project's linked via the CLI, so the custom Action was
+redundant and got removed.)
 
 **One-time setup** (only needed once, or if the Vercel project is ever recreated):
 
 1. `npm install --global vercel@latest`
 2. `vercel login`
-3. `vercel link` from the repo root — creates the Vercel project and writes
-   `.vercel/project.json` locally (gitignored, never commit it).
-4. Read the org and project IDs out of that file:
-   `cat .vercel/project.json`
-5. Create a token at vercel.com/account/tokens.
-6. Add three repo secrets (Settings → Secrets and variables → Actions):
-   `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
-7. In the Vercel project's dashboard, add the custom domain
+3. `vercel link` from the repo root — creates the Vercel project, connects it to
+   this GitHub repo, and writes `.vercel/project.json` locally (gitignored,
+   never commit it).
+4. In the Vercel project's dashboard, add the custom domain
    (`metrics.languagetechnology.org`) and add the CNAME it gives you in the
    Cloudflare account that owns `languagetechnology.org`'s DNS.
 
