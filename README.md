@@ -18,6 +18,9 @@ other account's DNS.
     `GET /api/fonts`), each Vercel's file-based routing turns into its own
     endpoint. Every response gets `Access-Control-Allow-Origin` (echoed from a
     small allow-list — the production site plus its local dev origins).
+  - `root.js` — a small self-describing JSON directory (name + endpoint list).
+    `vercel.json` rewrites the bare domain root (`/`) to it, so a health check or
+    anyone hitting the domain directly gets that instead of a bare 404.
   - `_lib/cors.js` — the shared CORS helper above. Prefixed with `_` so Vercel
     doesn't also turn it into a route (same for `_data/`).
   - `_data/staticData.js`, `_data/staticFontData.js` — hand-maintained snapshots,
