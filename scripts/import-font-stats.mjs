@@ -13,7 +13,7 @@
 //      human-diffable record of data changes, even though api/fonts.js no longer
 //      reads it directly.
 //   4. Pushes the same data to the Global Config store api/fonts.js actually reads
-//      from (one "fonts:catalog" record plus one "fonts:date:<date>" record per
+//      from (one "fonts_catalog" record plus one "fonts_date_<date>" record per
 //      date, mirroring api/products.js / scripts/push-products.mjs).
 //
 // Safe to re-run for the same date (overwrites that date's snapshot rather
@@ -105,18 +105,18 @@ export const staticFontData = ${JSON.stringify({ generatedAt, static: true, date
 writeFileSync(dataFile, output);
 
 const catalogItems = {
-  "fonts:catalog": { generatedAt, dates, fonts: fonts.map(({ snapshots, ...meta }) => meta) },
+  fonts_catalog: { generatedAt, dates, fonts: fonts.map(({ snapshots, ...meta }) => meta) },
 };
 for (const date of dates) {
   const metrics = {};
   for (const font of fonts) {
     if (font.snapshots[date]) metrics[font.name] = font.snapshots[date];
   }
-  catalogItems[`fonts:date:${date}`] = { generatedAt, metrics };
+  catalogItems[`fonts_date_${date}`] = { generatedAt, metrics };
 }
 await upsertItems(catalogItems);
 
 console.log(`Wrote ${dataFile}`);
-console.log(`Pushed fonts:catalog + ${dates.length} date record(s) to Global Config.`);
+console.log(`Pushed fonts_catalog + ${dates.length} date record(s) to Global Config.`);
 console.log(`Dates: ${dates.join(", ")}`);
 console.log(`Fonts: ${fonts.length} total (${fontsAdded} new this run)`);

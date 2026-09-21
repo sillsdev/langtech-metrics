@@ -4,12 +4,13 @@ import { withCors } from "./_lib/cors.js";
 export const config = { runtime: "edge" };
 
 const CACHE_TTL_SECONDS = 300;
-const CATALOG_KEY = "fonts:catalog";
-const dateKey = (date) => `fonts:date:${date}`;
+const CATALOG_KEY = "fonts_catalog";
+const dateKey = (date) => `fonts_date_${date}`;
 
 // Mirrors products.js's catalog + per-period split: scripts/import-font-stats.mjs
-// writes "fonts:catalog" (font names + every date ever imported) plus one
-// "fonts:date:<date>" record per import date.
+// writes "fonts_catalog" (font names + every date ever imported) plus one
+// "fonts_date_<date>" record per import date. Underscores, not colons, because
+// Global Config keys only allow [A-Za-z0-9_-].
 export default async function handler(request) {
   if (request.method !== "GET") {
     return withCors(request, new Response("Method not allowed", { status: 405 }));
