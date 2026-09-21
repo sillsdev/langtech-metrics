@@ -23,23 +23,45 @@ other account's DNS.
     anyone hitting the domain directly gets that instead of a bare 404.
   - `_lib/cors.js` — the shared CORS helper above. Prefixed with `_` so Vercel
     doesn't also turn it into a route (same for `_data/`).
-  - `_data/staticData.js`, `_data/staticFontData.js` — hand-maintained snapshots,
-    currently the only data source (see "Populating data").
-- **`scripts/import-font-stats.mjs`** — quarterly CSV import that rewrites
-  `api/_data/staticFontData.js`.
+  - `_data/staticData.js`, `_data/staticFontData.js` — hand-maintained snapshots.
+    Kept as a human-diffable record of data changes in git history, but no longer
+    read at request time (see "Populating data") — `products.js`/`fonts.js` read
+    from Global Config only, with no fallback if it's empty.
+- **`scripts/lib/global-config.mjs`** — shared write helper (Vercel REST API,
+  needs `VERCEL_API_TOKEN`) used by the two scripts below.
+- **`scripts/push-products.mjs`** — pushes `api/_data/staticData.js` to the store.
+  Run by hand after hand-editing that file.
+- **`scripts/import-font-stats.mjs`** — quarterly CSV import: rewrites
+  `api/_data/staticFontData.js` *and* pushes the same data to the store.
 
 ## Populating data
 
-**There's no live data source yet.** This API previously had a companion Cloudflare
-Worker that pulled product metrics from a Google Sheet into KV on a cron schedule —
-that was removed when this moved to Vercel, and a replacement (a Vercel Cron Job
-writing to a Vercel-native store — KV or Edge Config) is still to be designed. Until
-then, every request serves the static snapshots in `api/_data/`.
+Both routes read from a Vercel [Global Config](https://vercel.com/docs/global-config)
+store (`langtech_metrics`, id `ecfg_tphutqyjwlgls1zjiskkmopfm6zn`, on the
+`sil-lang-tech` team) via the read-only `@vercel/global-config` SDK — that's what
+the `GLOBAL_CONFIG` environment variable on the Vercel project is for. There's no
+fallback: if a key isn't there, the route returns `503` rather than making
+something up.
+
+**Nothing writes to it automatically yet** — a scheduled sync (Vercel Cron Job
+pulling from the Google Sheet, replacing the old Cloudflare cron worker that did
+this) is still to be designed. Until then, run the scripts by hand after updating
+the source data:
+
+```
+VERCEL_API_TOKEN=<a personal access token from vercel.com/account/tokens> node scripts/push-products.mjs
+VERCEL_API_TOKEN=<...> node scripts/import-font-stats.mjs "<path to CSV>"
+```
+
+`VERCEL_API_TOKEN` is a different token from the Global Config's own read token
+(the connection string baked into `GLOBAL_CONFIG`) — that one can only read, this
+one needs write access to the `sil-lang-tech` team's Global Config.
 
 ## Running it locally
 
 ```
 npm install --global vercel@latest   # once
+vercel env pull --environment=development   # once, to get GLOBAL_CONFIG into .env.local
 vercel dev
 ```
 
@@ -88,8 +110,12 @@ works locally once step 3 is done.
 
 ## TODO
 
-- [ ] Design and build a live data pipeline (Vercel Cron Job + a Vercel-native
-  store — KV or Edge Config) for product metrics; the previous Google Sheets sync
-  worker was removed when this moved off Cloudflare.
-- [ ] Point `scripts/import-font-stats.mjs` (or a future sync) at that store
-  directly instead of only rewriting the static fixture.
+- [ ] Design and build a scheduled sync (Vercel Cron Job pulling from the Google
+  Sheet) that writes to Global Config directly, replacing the current by-hand
+  `scripts/push-products.mjs` / `scripts/import-font-stats.mjs` runs; the previous
+  Cloudflare cron worker that did this for products was removed when this moved
+  off Cloudflare.
+- [ ] Decide whether yearly / since-start rollups (requested for products —
+  additive metrics like downloads/installs sum across quarters, point-in-time
+  ones like active_users/countries don't) get computed by that sync when it
+  writes, or by the read routes on the fly.

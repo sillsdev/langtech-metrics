@@ -1,12 +1,12 @@
-// Static snapshot of the "LangTech Analytics Dashboard" Google Sheet, generated
-// 2026-08-28 from a manual export (see input/).
-// Covers all non-font products for the last two fiscal quarters. This is the sole
-// data source api/products.js serves until a live sync mechanism (the previous
-// Google Sheets sync worker was removed; its replacement is TBD) exists.
+// Snapshot of the "LangTech Analytics Dashboard" Google Sheet, generated 2026-08-28
+// from a manual export (see input/). Covers all non-font products for the last two
+// fiscal quarters. Kept as a human-diffable record of data changes; api/products.js
+// itself reads from Global Config (see scripts/lib/global-config.mjs), which
+// scripts/push-products.mjs pushes this file's contents to.
 //
 // To refresh: re-parse a newer export of the sheet (Product List tab for metadata,
-// the quarterly tabs for metrics, joined by product name) and replace this file's
-// staticProducts value.
+// the quarterly tabs for metrics, joined by product name), replace this file's
+// staticProducts value, then run `node scripts/push-products.mjs`.
 
 export const staticProducts = {
   "generatedAt": "2026-08-25T00:00:00Z",
