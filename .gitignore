@@ -145,7 +145,8 @@ vite.config.ts.timestamp-*
 # Vercel
 .vercel
 
-# SIL-internal raw data exports (see scripts/import-font-stats.mjs)
-input/*.xlsx
-input/fonts/*.csv
+# SIL-internal raw data exports (see scripts/import-font-stats.mjs) -- ignore the
+# whole directory, not just specific extensions, since exports don't always come
+# as .csv/.xlsx (e.g. a .txt export tripped this up once already)
+input/
 .env*

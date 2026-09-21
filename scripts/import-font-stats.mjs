@@ -2,31 +2,27 @@
 //
 // Usage:
 //   node scripts/import-font-stats.mjs "<path to the new font_statistics_*.csv>"
-//   (requires VERCEL_API_TOKEN -- see scripts/lib/global-config.mjs)
+//   (requires `vercel login` -- see scripts/lib/global-config.mjs)
 //
 // What it does:
-//   1. Copies the source CSV into input/fonts/ (gitignored raw-source archive,
-//      mirrors input/*.xlsx for the product snapshot) if it isn't already there.
+//   1. Copies the source CSV into input/fonts/ (gitignored raw-source archive)
+//      if it isn't already there.
 //   2. Parses it (columns: Date, Font, Weekly Views, Lifetime Views).
-//   3. Upserts each date's snapshot into api/_data/staticFontData.js, keyed by
-//      date, and rewrites that file sorted by date ascending -- kept as a
-//      human-diffable record of data changes, even though api/fonts.js no longer
-//      reads it directly.
-//   4. Pushes the same data to the Global Config store api/fonts.js actually reads
-//      from (one "fonts_catalog" record plus one "fonts_date_<date>" record per
-//      date, mirroring api/products.js / scripts/push-products.mjs).
+//   3. Reads the current fonts_catalog from Global Config, merges in any new
+//      font names and dates found in this CSV, and pushes the updated catalog
+//      plus one fonts_date_<date> record per *newly parsed* date -- dates
+//      already in the store from an earlier run aren't re-pushed.
 //
-// Safe to re-run for the same date (overwrites that date's snapshot rather
-// than duplicating it).
+// Safe to re-run for the same date (overwrites that date's record rather than
+// duplicating it).
 
-import { readFileSync, writeFileSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { upsertItems } from "./lib/global-config.mjs";
+import { getItem, upsertItems } from "./lib/global-config.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const inputDir = join(repoRoot, "input", "fonts");
-const dataFile = join(repoRoot, "api", "_data", "staticFontData.js");
 
 const srcPath = process.argv[2];
 if (!srcPath) {
@@ -65,58 +61,36 @@ for (const line of rows) {
   parsedByDate.get(date).set(name, { weeklyViews, lifetimeViews });
 }
 
-let existing = { dates: [], fonts: [] };
-if (existsSync(dataFile)) {
-  const mod = await import(`${dataFile.replace(/\\/g, "/")}?t=${Date.now()}`);
-  existing = mod.staticFontData;
-}
-
-const fontsByName = new Map(existing.fonts.map((f) => [f.name, { ...f, snapshots: { ...f.snapshots } }]));
-const dateSet = new Set(existing.dates);
+const catalog = (await getItem("fonts_catalog")) ?? { dates: [], fonts: [] };
+const fontNames = new Set(catalog.fonts.map((f) => f.name));
+const dateSet = new Set(catalog.dates);
 let fontsAdded = 0;
 
+const newDates = [...parsedByDate.keys()];
 for (const [date, byFont] of parsedByDate) {
   dateSet.add(date);
-  for (const [name, values] of byFont) {
-    if (!fontsByName.has(name)) {
-      fontsByName.set(name, { name, snapshots: {} });
+  for (const name of byFont.keys()) {
+    if (!fontNames.has(name)) {
+      fontNames.add(name);
       fontsAdded++;
     }
-    fontsByName.get(name).snapshots[date] = values;
   }
 }
-
-const dates = [...dateSet].sort();
-const fonts = [...fontsByName.values()].sort((a, b) => a.name.localeCompare(b.name));
 
 const generatedAt = new Date().toISOString();
+const dates = [...dateSet].sort();
+const fonts = [...fontNames].sort().map((name) => ({ name }));
 
-const output = `// Static snapshot for the Font Usage data served by api/fonts.js, built from
-// quarterly CSV exports of a fonts analytics dashboard (see input/fonts/ for the raw
-// exports this was generated from, gitignored). Kept as a human-diffable record of
-// data changes; api/fonts.js itself reads from Global Config (see
-// scripts/lib/global-config.mjs), which this script also pushes to.
-//
-// To refresh each quarter: node scripts/import-font-stats.mjs "<new CSV path>"
-
-export const staticFontData = ${JSON.stringify({ generatedAt, static: true, dates, fonts }, null, 2)};
-`;
-
-writeFileSync(dataFile, output);
-
-const catalogItems = {
-  fonts_catalog: { generatedAt, dates, fonts: fonts.map(({ snapshots, ...meta }) => meta) },
-};
-for (const date of dates) {
+const items = { fonts_catalog: { generatedAt, dates, fonts } };
+for (const date of newDates) {
   const metrics = {};
-  for (const font of fonts) {
-    if (font.snapshots[date]) metrics[font.name] = font.snapshots[date];
+  for (const [name, values] of parsedByDate.get(date)) {
+    metrics[name] = values;
   }
-  catalogItems[`fonts_date_${date}`] = { generatedAt, metrics };
+  items[`fonts_date_${date}`] = { generatedAt, metrics };
 }
-await upsertItems(catalogItems);
+await upsertItems(items);
 
-console.log(`Wrote ${dataFile}`);
-console.log(`Pushed fonts_catalog + ${dates.length} date record(s) to Global Config.`);
-console.log(`Dates: ${dates.join(", ")}`);
+console.log(`Pushed fonts_catalog + ${newDates.length} date record(s) to Global Config.`);
+console.log(`Dates this run: ${newDates.join(", ")}`);
 console.log(`Fonts: ${fonts.length} total (${fontsAdded} new this run)`);
