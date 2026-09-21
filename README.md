@@ -5,12 +5,6 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
 `languagetechnology-org-cloudflare-pages`). Deployed on Vercel as
 `metrics.languagetechnology.org`, separate from that static site.
 
-This used to be a Cloudflare Worker on the same zone as the static site, but
-`metrics.languagetechnology.org`'s DNS lives in a different Cloudflare account than
-this API's, and Cloudflare doesn't let one account manage a custom domain pointing
-at another account's Worker — hence Vercel instead, fronted by a CNAME from that
-other account's DNS.
-
 ## Layout
 
 - **`api/`** — the read API, deployed as Vercel Edge Functions.
@@ -23,23 +17,47 @@ other account's DNS.
     anyone hitting the domain directly gets that instead of a bare 404.
   - `_lib/cors.js` — the shared CORS helper above. Prefixed with `_` so Vercel
     doesn't also turn it into a route (same for `_data/`).
-  - `_data/staticData.js`, `_data/staticFontData.js` — hand-maintained snapshots,
-    currently the only data source (see "Populating data").
-- **`scripts/import-font-stats.mjs`** — quarterly CSV import that rewrites
-  `api/_data/staticFontData.js`.
+  - `_data/products.template.js` — not real data, just the shape of a single
+    quarter's product input file (see "Populating data").
+- **`scripts/lib/global-config.mjs`** — shared read/write helper (shells out to
+  the `vercel global-config` CLI, so it needs `vercel login`) used by the two
+  scripts below.
+- **`scripts/push-products.mjs`** — pushes one quarter's product data (from a
+  file matching `_data/products.template.js`'s shape) to the store.
+- **`scripts/import-font-stats.mjs`** — parses a quarterly CSV export and pushes
+  it to the store.
 
 ## Populating data
 
-**There's no live data source yet.** This API previously had a companion Cloudflare
-Worker that pulled product metrics from a Google Sheet into KV on a cron schedule —
-that was removed when this moved to Vercel, and a replacement (a Vercel Cron Job
-writing to a Vercel-native store — KV or Edge Config) is still to be designed. Until
-then, every request serves the static snapshots in `api/_data/`.
+Both routes read from a Vercel [Global Config](https://vercel.com/docs/global-config)
+store (`langtech_metrics`) via the read-only `@vercel/global-config` SDK — that's
+what the `GLOBAL_CONFIG` environment variable on the Vercel project is for.
+There's no fallback: if a key isn't there, the route returns `503` rather than
+making something up.
+
+**Nothing writes to it automatically yet** — a scheduled sync (Vercel Cron Job
+pulling from the Google Sheet) is still to be designed. Until then, run the
+scripts by hand each quarter (`vercel login` first — a personal access token
+won't work for this). Both scripts only touch the one quarter/date they're given
+plus the catalog — they never reload the store's other history:
+
+```
+vercel login   # once
+
+# Products: copy api/_data/products.template.js somewhere gitignored (e.g.
+# input/products/<quarter>.js), fill in real values from that quarter's sheet
+# export, then:
+node scripts/push-products.mjs input/products/<quarter>.js
+
+# Fonts:
+node scripts/import-font-stats.mjs "<path to CSV>"
+```
 
 ## Running it locally
 
 ```
 npm install --global vercel@latest   # once
+vercel env pull --environment=development   # once, to get GLOBAL_CONFIG into .env.local
 vercel dev
 ```
 
@@ -51,28 +69,23 @@ To test end-to-end against the front end, also run
 (**http://localhost:8788**) — that page's `impact/index.html` automatically points
 at this API's local dev server when it detects it's running on localhost, and
 `api/_lib/cors.js`'s allow-list already includes `http://localhost:8788`, so no
-extra config is needed on either side (you'll need to update that page's local dev
-port if it still points at `:8787` from before this moved off Cloudflare — see that
-repo's `impact/README.md`). See that repo's `impact/README.md` for details.
+extra config is needed on either side. See that repo's `impact/README.md` for
+details.
 
 ## Deploying
 
-Deploys run via GitHub Actions (`.github/workflows/deploy.yml`) on every push to
-`main`, using the Vercel CLI with a token rather than Vercel's GitHub App/dashboard
-import — that import flow isn't available without a paid plan for this repo's org.
+Vercel's own GitHub integration deploys every push to `main` automatically —
+`vercel link` (the one-time setup below) connects the repo to the project, so no
+GitHub Actions workflow is needed for this.
 
 **One-time setup** (only needed once, or if the Vercel project is ever recreated):
 
 1. `npm install --global vercel@latest`
 2. `vercel login`
-3. `vercel link` from the repo root — creates the Vercel project and writes
-   `.vercel/project.json` locally (gitignored, never commit it).
-4. Read the org and project IDs out of that file:
-   `cat .vercel/project.json`
-5. Create a token at vercel.com/account/tokens.
-6. Add three repo secrets (Settings → Secrets and variables → Actions):
-   `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
-7. In the Vercel project's dashboard, add the custom domain
+3. `vercel link` from the repo root — creates the Vercel project, connects it to
+   this GitHub repo, and writes `.vercel/project.json` locally (gitignored,
+   never commit it).
+4. In the Vercel project's dashboard, add the custom domain
    (`metrics.languagetechnology.org`) and add the CNAME it gives you in the
    Cloudflare account that owns `languagetechnology.org`'s DNS.
 
@@ -81,15 +94,18 @@ works locally once step 3 is done.
 
 ## Data notes
 
-- `input/` holds raw source exports (`.xlsx`, font CSVs) used to generate the static
-  snapshots. Gitignored (SIL-internal data) — never commit it.
-- The product snapshot excludes the sheet's "Fonts" section and any placeholder rows
-  with no dev status and no metrics ever recorded.
+- `input/` holds raw source exports (font CSVs, per-quarter product input files)
+  used to populate the store. Gitignored entirely (SIL-internal data) — never
+  commit anything under it.
+- Product data excludes the sheet's "Fonts" section and any placeholder rows with
+  no dev status and no metrics ever recorded.
 
 ## TODO
 
-- [ ] Design and build a live data pipeline (Vercel Cron Job + a Vercel-native
-  store — KV or Edge Config) for product metrics; the previous Google Sheets sync
-  worker was removed when this moved off Cloudflare.
-- [ ] Point `scripts/import-font-stats.mjs` (or a future sync) at that store
-  directly instead of only rewriting the static fixture.
+- [ ] Design and build a scheduled sync (Vercel Cron Job pulling from the Google
+  Sheet) that writes to Global Config directly, replacing the current by-hand
+  `scripts/push-products.mjs` / `scripts/import-font-stats.mjs` runs.
+- [ ] Decide whether yearly / since-start rollups (requested for products —
+  additive metrics like downloads/installs sum across quarters, point-in-time
+  ones like active_users/countries don't) get computed by that sync when it
+  writes, or by the read routes on the fly.
