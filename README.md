@@ -18,8 +18,7 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   - `_lib/cors.js` — the shared CORS helper above. Prefixed with `_` so Vercel
     doesn't also turn it into a route (same for `_data/`).
   - `_data/products.template.js` — not real data, just the shape of a single
-    quarter's product input file (see "Populating data"). `products.js`/`fonts.js`
-    read from Global Config only, with no fallback if it's empty.
+    quarter's product input file (see "Populating data").
 - **`scripts/lib/global-config.mjs`** — shared read/write helper (shells out to
   the `vercel global-config` CLI, so it needs `vercel login`) used by the two
   scripts below.
@@ -38,10 +37,9 @@ making something up.
 
 **Nothing writes to it automatically yet** — a scheduled sync (Vercel Cron Job
 pulling from the Google Sheet) is still to be designed. Until then, run the
-scripts by hand each quarter (once `vercel login`'d — a personal access token
-isn't enough: it got a `403` writing to this store, while the CLI's own logged-in
-session can). Both scripts only touch the one quarter/date they're given plus the
-catalog — they never reload the store's other history:
+scripts by hand each quarter (`vercel login` first — a personal access token
+won't work for this). Both scripts only touch the one quarter/date they're given
+plus the catalog — they never reload the store's other history:
 
 ```
 vercel login   # once
@@ -78,12 +76,7 @@ details.
 
 Vercel's own GitHub integration deploys every push to `main` automatically —
 `vercel link` (the one-time setup below) connects the repo to the project, so no
-GitHub Actions workflow is needed for this. (An earlier attempt built a custom
-Action around the Vercel CLI, on the assumption that Vercel's dashboard import
-flow needed a paid plan; that assumption turned out to only apply to the
-dashboard's own "Import Git Repository" click-through, not to the native
-integration once the project's linked via the CLI, so the custom Action was
-redundant and got removed.)
+GitHub Actions workflow is needed for this.
 
 **One-time setup** (only needed once, or if the Vercel project is ever recreated):
 
