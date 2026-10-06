@@ -11,8 +11,6 @@
 // once, and these scripts use that same session.
 import { execFile, exec } from "node:child_process";
 import { promisify } from "node:util";
-import { writeFile, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const execFileAsync = promisify(execFile);
@@ -40,45 +38,82 @@ export async function getItem(key) {
   }
 }
 
-// On Windows, "vercel" is a .cmd shim -- Node can only launch it through a shell,
-// and cmd.exe (the default) caps a command line at 8191 characters, too small for
-// a several-KB JSON patch. PowerShell has much more headroom, but PowerShell 5.1
-// has its own well-known bug: it silently strips embedded double-quote characters
-// when passing a string to a *native* command's argv. The documented workaround is
-// doubling each `"` (PowerShell's own string-literal escape for a literal `"`)
-// before handing the value to the native command. Running via a temp .ps1 file
-// (rather than -Command) avoids a second layer of escaping for the script text
-// itself. On POSIX, "vercel" is a real executable/shebang script -- no shell or
-// escaping games needed, so the JSON just goes directly into argv.
+// On Windows, "vercel" is a .cmd/.ps1 shim -- Node can only launch it through a
+// shell, and both the available shells have sharp edges with a several-KB JSON
+// argument: cmd.exe caps a command line at 8191 characters, and PowerShell 5.1
+// silently strips embedded double-quote characters when passing a string to a
+// *native* command's argv (a documented bug; the usual workaround of doubling
+// each `"` was tried here and turned out to be unreliable in practice -- it
+// intermittently delivered a mangled --patch value with no useful error,
+// independent of patch size or content).
+//
+// The reliable fix is to skip the shim (and therefore the shell) entirely:
+// resolve the CLI's own vc.js and run it directly via `node`, a real
+// executable, so the JSON patch goes into argv exactly as constructed --
+// matching how POSIX already invokes the real "vercel" executable/shebang
+// script with no shell involved.
+let vcJsPathPromise;
+async function resolveVcJsPath() {
+  if (!vcJsPathPromise) {
+    vcJsPathPromise = (async () => {
+      const { stdout } = await execAsync("npm root -g");
+      return join(stdout.trim(), "vercel", "dist", "vc.js");
+    })();
+  }
+  return vcJsPathPromise;
+}
+
 async function runVercelPatch(patchJson) {
+  const args = ["global-config", "update", STORE_ID, "--patch", patchJson, "--json"];
   if (process.platform !== "win32") {
-    return execFileAsync("vercel", ["global-config", "update", STORE_ID, "--patch", patchJson, "--json"], {
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    return execFileAsync("vercel", args, { maxBuffer: 10 * 1024 * 1024 });
   }
 
-  const forNativeArg = patchJson.replace(/"/g, '""');
-  const psLiteral = "'" + forNativeArg.replace(/'/g, "''") + "'";
-  const script = `& vercel global-config update ${STORE_ID} --patch ${psLiteral} --json\nexit $LASTEXITCODE\n`;
+  const vcJsPath = await resolveVcJsPath();
+  return execFileAsync("node", [vcJsPath, ...args], { maxBuffer: 10 * 1024 * 1024 });
+}
 
-  const scriptPath = join(tmpdir(), `global-config-patch-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`);
-  await writeFile(scriptPath, script, "utf8");
-  try {
-    return await execFileAsync("powershell.exe", ["-NoProfile", "-File", scriptPath], {
-      maxBuffer: 10 * 1024 * 1024,
-    });
-  } finally {
-    await unlink(scriptPath).catch(() => {});
+// A single `vercel global-config update --patch` call silently drops writes
+// once the patch body gets large enough (observed: an 18-item, ~30KB patch
+// mixing fonts_catalog with several fonts_date_* records reported success but
+// fonts_catalog never landed, while the same items split into two smaller
+// calls both persisted -- no error surfaces either way, so there's nothing to
+// catch). Chunking every call well under that threshold is the only known-
+// reliable path; re-check this if a future export makes individual items
+// (e.g. one quarter's product list, or one font-date snapshot) exceed it on
+// their own, since chunking can't split a single oversized item.
+const MAX_PATCH_BYTES = 15_000;
+
+async function sendOperations(operations) {
+  const chunks = [];
+  let current = [];
+  let currentBytes = 0;
+  for (const op of operations) {
+    const opBytes = JSON.stringify(op).length;
+    if (current.length > 0 && currentBytes + opBytes > MAX_PATCH_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(op);
+    currentBytes += opBytes;
+  }
+  if (current.length > 0) chunks.push(current);
+
+  for (const chunk of chunks) {
+    const patch = JSON.stringify({ items: chunk });
+    try {
+      await runVercelPatch(patch);
+    } catch (err) {
+      throw new Error(`vercel global-config update failed: ${err.stderr || err.message}`);
+    }
   }
 }
 
 export async function upsertItems(items) {
-  const patch = JSON.stringify({
-    items: Object.entries(items).map(([key, value]) => ({ operation: "upsert", key, value })),
-  });
-  try {
-    await runVercelPatch(patch);
-  } catch (err) {
-    throw new Error(`vercel global-config update failed: ${err.stderr || err.message}`);
-  }
+  await sendOperations(Object.entries(items).map(([key, value]) => ({ operation: "upsert", key, value })));
+}
+
+export async function deleteItems(keys) {
+  await sendOperations(keys.map((key) => ({ operation: "delete", key })));
 }

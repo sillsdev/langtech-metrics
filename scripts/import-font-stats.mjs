@@ -7,11 +7,15 @@
 // What it does:
 //   1. Copies the source CSV into input/fonts/ (gitignored raw-source archive)
 //      if it isn't already there.
-//   2. Parses it (columns: Date, Font, Weekly Views, Lifetime Views).
+//   2. Parses it (columns: Date, Font, Weekly Views, Lifetime Views). The
+//      source export is weekly, but we only keep one snapshot per calendar
+//      month -- the latest date we have stats for in that month, across both
+//      the dates already in the store and any new dates this CSV adds.
 //   3. Reads the current fonts_catalog from Global Config, merges in any new
-//      font names and dates found in this CSV, and pushes the updated catalog
-//      plus one fonts_date_<date> record per *newly parsed* date -- dates
-//      already in the store from an earlier run aren't re-pushed.
+//      font names found in this CSV, pushes the updated catalog plus one
+//      fonts_date_<date> record per kept date this CSV has data for, and
+//      deletes any previously-stored date record that's no longer kept
+//      (e.g. an earlier weekly date now superseded by that month's latest).
 //
 // Safe to re-run for the same date (overwrites that date's record rather than
 // duplicating it).
@@ -19,7 +23,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getItem, upsertItems } from "./lib/global-config.mjs";
+import { getItem, upsertItems, deleteItems } from "./lib/global-config.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const inputDir = join(repoRoot, "input", "fonts");
@@ -63,12 +67,9 @@ for (const line of rows) {
 
 const catalog = (await getItem("fonts_catalog")) ?? { dates: [], fonts: [] };
 const fontNames = new Set(catalog.fonts.map((f) => f.name));
-const dateSet = new Set(catalog.dates);
 let fontsAdded = 0;
 
-const newDates = [...parsedByDate.keys()];
-for (const [date, byFont] of parsedByDate) {
-  dateSet.add(date);
+for (const byFont of parsedByDate.values()) {
   for (const name of byFont.keys()) {
     if (!fontNames.has(name)) {
       fontNames.add(name);
@@ -77,20 +78,40 @@ for (const [date, byFont] of parsedByDate) {
   }
 }
 
+// One snapshot per calendar month -- the latest date we have stats for in
+// that month -- across both the dates already in the store and any new
+// dates this CSV adds.
+const monthOf = (date) => date.slice(0, 7);
+const latestByMonth = new Map();
+for (const date of new Set([...catalog.dates, ...parsedByDate.keys()])) {
+  const month = monthOf(date);
+  if (!latestByMonth.has(month) || date > latestByMonth.get(month)) {
+    latestByMonth.set(month, date);
+  }
+}
+const keepDates = [...latestByMonth.values()].sort();
+const dropDates = catalog.dates.filter((date) => !keepDates.includes(date));
+
 const generatedAt = new Date().toISOString();
-const dates = [...dateSet].sort();
 const fonts = [...fontNames].sort().map((name) => ({ name }));
 
-const items = { fonts_catalog: { generatedAt, dates, fonts } };
-for (const date of newDates) {
+const items = { fonts_catalog: { generatedAt, dates: keepDates, fonts } };
+const pushedDates = [];
+for (const date of keepDates) {
+  if (!parsedByDate.has(date)) continue; // kept from an earlier run, no new data this time
   const metrics = {};
   for (const [name, values] of parsedByDate.get(date)) {
     metrics[name] = values;
   }
   items[`fonts_date_${date}`] = { generatedAt, metrics };
+  pushedDates.push(date);
 }
 await upsertItems(items);
+if (dropDates.length > 0) await deleteItems(dropDates.map((date) => `fonts_date_${date}`));
 
-console.log(`Pushed fonts_catalog + ${newDates.length} date record(s) to Global Config.`);
-console.log(`Dates this run: ${newDates.join(", ")}`);
+console.log(`Pushed fonts_catalog + ${pushedDates.length} date record(s) to Global Config.`);
+console.log(`Dates kept (one per month): ${keepDates.join(", ")}`);
+if (dropDates.length > 0) {
+  console.log(`Removed ${dropDates.length} superseded date record(s): ${dropDates.join(", ")}`);
+}
 console.log(`Fonts: ${fonts.length} total (${fontsAdded} new this run)`);
