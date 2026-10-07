@@ -3,7 +3,7 @@ import { withCors } from "./_lib/cors.js";
 
 export const config = { runtime: "edge" };
 
-const CACHE_TTL_SECONDS = 300;
+const CACHE_TTL_SECONDS = 900;
 const CATALOG_KEY = "products_catalog";
 const quarterKey = (period) => `products_quarter_${period}`;
 
