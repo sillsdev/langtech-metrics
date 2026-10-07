@@ -31,8 +31,11 @@ export reshuffles columns):
     A Product Name | B (completion %, ignored) | ... | J Downloads |
     K Installs | L Active Projects | M New Projects Started | N Active Users
     | O Avg MAU | P-R MAU per month | S Number of User Countries |
-    T Number of Languages Impacted | ...
-  Only J, K, L, N, S, T map to the template's metrics object.
+    T Number of Languages Impacted | ... | W Notes/Comments
+  J, K, L, N, S, T, W map to the template's metrics object (W as the free-text
+  `notes` field -- a short explanation of something notable about that
+  product's numbers this quarter, shown on the dashboard's "What changed"
+  section; blank is common and means nothing notable to call out).
 
 Inclusion rule (matches the README's "excludes the sheet's Fonts section and
 any placeholder rows with no dev status and no metrics ever recorded"):
@@ -72,6 +75,7 @@ COL_ACTIVE_PROJECTS = 12
 COL_ACTIVE_USERS = 14
 COL_COUNTRIES = 19
 COL_LANGUAGES_IMPACTED = 20
+COL_NOTES = 23  # W
 
 
 def clean_number(value):
@@ -98,6 +102,15 @@ def clean_number(value):
     return None
 
 
+def clean_text(value):
+    # Notes/Comments is free text -- blank is the common case (nothing notable to
+    # call out), so normalize both None and whitespace-only to None rather than "".
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
 def read_metrics_sheet(ws):
     by_name = {}
     for row in range(METRICS_FIRST_DATA_ROW, ws.max_row + 1):
@@ -111,6 +124,7 @@ def read_metrics_sheet(ws):
             "active_users": clean_number(ws.cell(row=row, column=COL_ACTIVE_USERS).value),
             "countries": clean_number(ws.cell(row=row, column=COL_COUNTRIES).value),
             "languages_impacted": clean_number(ws.cell(row=row, column=COL_LANGUAGES_IMPACTED).value),
+            "notes": clean_text(ws.cell(row=row, column=COL_NOTES).value),
         }
     return by_name
 
@@ -131,7 +145,9 @@ def is_open_source(value):
 
 
 def has_any_metric(metrics):
-    return any(v is not None for v in metrics.values())
+    # "notes" is commentary, not a usage metric -- a stray comment on an otherwise
+    # all-blank row shouldn't by itself count as "this product reported data".
+    return any(v is not None for k, v in metrics.items() if k != "notes")
 
 
 def main():
@@ -164,6 +180,7 @@ def main():
         metrics = metrics_by_name.get(name, {
             "downloads": None, "installs": None, "active_projects": None,
             "active_users": None, "countries": None, "languages_impacted": None,
+            "notes": None,
         })
         if not dev_status and not has_any_metric(metrics):
             skipped.append(name)
