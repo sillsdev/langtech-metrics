@@ -30,6 +30,13 @@ export default {
         active_users: 0,
         countries: 0,
         languages_impacted: 0,
+        // Optional, from the quarter sheet's Notes/Comments column -- a short
+        // explanation of something notable about this product's numbers THIS quarter
+        // (e.g. a methodology change or a real usage trend), shown on the dashboard's
+        // "What changed" section. Lives inside `metrics` (not top-level product
+        // metadata) specifically so it's scoped to this one quarter's record, not
+        // merged into the long-lived catalog entry. Omit/null when there's nothing to say.
+        notes: null,
       },
     },
   ],
