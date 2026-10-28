@@ -10,6 +10,14 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getItem, upsertItems } from "./lib/global-config.mjs";
 
+// Mirrors convert-dashboard-export.py's `pending` definition, with the same
+// all-null-metrics fallback for an input file that didn't set `pending` itself.
+const CORE_METRIC_KEYS = ["downloads", "installs", "active_projects", "active_users", "countries", "languages_impacted"];
+function isPending(productMetrics) {
+  if (typeof productMetrics.pending === "boolean") return productMetrics.pending;
+  return CORE_METRIC_KEYS.every((key) => productMetrics[key] == null);
+}
+
 const inputPath = process.argv[2];
 if (!inputPath) {
   console.error("Usage: node scripts/push-products.mjs <path to a quarter input file>");
@@ -46,9 +54,14 @@ for (const { metrics: productMetrics, ...meta } of products) {
 catalog.products = [...productsByName.values()];
 catalog.generatedAt = generatedAt;
 
+// True only once every product listed this quarter has actually reported -- lets the
+// dashboard flag quarter-over-quarter comparisons as provisional while results are
+// still trickling in, instead of only being able to tell afterwards, product by product.
+const complete = products.every(({ metrics: productMetrics }) => !isPending(productMetrics));
+
 await upsertItems({
   products_catalog: catalog,
-  [`products_quarter_${quarter}`]: { generatedAt, metrics },
+  [`products_quarter_${quarter}`]: { generatedAt, complete, metrics },
 });
 
 console.log(`Pushed products_catalog + products_quarter_${quarter} (${products.length} product(s)) to Global Config.`);

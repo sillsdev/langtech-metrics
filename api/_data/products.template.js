@@ -37,6 +37,10 @@ export default {
         // metadata) specifically so it's scoped to this one quarter's record, not
         // merged into the long-lived catalog entry. Omit/null when there's nothing to say.
         notes: null,
+        // True when none of the metrics above were reported for this product this
+        // quarter (set automatically by the converter) -- lets the dashboard show a
+        // "stats not in yet" label instead of a row of zeroes.
+        pending: false,
       },
     },
   ],

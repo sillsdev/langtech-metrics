@@ -37,11 +37,22 @@ export default async function handler(request) {
   );
 }
 
+// Mirrors convert-dashboard-export.py's `pending` definition, for quarters pushed
+// before push-products.mjs started computing `complete` itself.
+const CORE_METRIC_KEYS = ["downloads", "installs", "active_projects", "active_users", "countries", "languages_impacted"];
+function isPending(productMetrics) {
+  if (!productMetrics) return true;
+  if (typeof productMetrics.pending === "boolean") return productMetrics.pending;
+  return CORE_METRIC_KEYS.every((key) => productMetrics[key] == null);
+}
+
 function shapeResponse(catalog, quarter, quarterDoc) {
   const metricsByName = quarterDoc?.metrics ?? {};
+  const complete = quarterDoc?.complete ?? catalog.products.every((p) => !isPending(metricsByName[p.name]));
   return {
     generatedAt: quarterDoc?.generatedAt ?? catalog.generatedAt,
     quarter,
+    complete,
     quarters: catalog.quarters,
     categories: catalog.categories,
     platforms: catalog.platforms,
