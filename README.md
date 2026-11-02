@@ -24,6 +24,11 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   scripts below.
 - **`scripts/push-products.mjs`** — pushes one quarter's product data (from a
   file matching `_data/products.template.js`'s shape) to the store.
+- **`scripts/set-product-suites.mjs`** — hand-maintained patch that groups a
+  product family's rows together on the dashboard (e.g. Bloom Editor/Library/
+  Reader/BloomPUB Viewer under "Bloom"). Edit its `SUITES` mapping and re-run;
+  independent of the quarterly push, which would otherwise wipe this field
+  (see the script's own header comment for why).
 - **`scripts/import-font-stats.mjs`** — parses a CSV export (which may contain
   several weekly snapshots) and pushes it to the store, keeping only one
   snapshot per calendar month (the latest date with stats in that month) and
@@ -60,6 +65,10 @@ node scripts/push-products.mjs input/products/<quarter>.js
 
 # Fonts:
 node scripts/import-font-stats.mjs "<path to CSV>"
+
+# Product suites (only needed when SUITES in the script changes, or after a
+# quarterly push touches a grouped product -- see the script's own comment):
+node scripts/set-product-suites.mjs
 ```
 
 ## Running it locally
