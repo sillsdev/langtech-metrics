@@ -10,6 +10,11 @@
 // quarter. A product NOT listed this quarter is left untouched in the catalog.
 // This only touches products_catalog and the one products_quarter_<quarter>
 // record for the quarter named below -- other quarters are never re-pushed.
+//
+// Don't add a "suite" field here (e.g. grouping Bloom Editor/Library/Reader
+// together) -- that's hand-maintained separately by
+// scripts/set-product-suites.mjs, independent of the quarterly spreadsheet,
+// and this push would wipe it since it isn't part of this object.
 
 export default {
   quarter: "FY99Q9",
