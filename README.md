@@ -35,8 +35,8 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   not a project dependency, since it only ever runs by hand. The column
   layout and row-inclusion rule it encodes are documented in the script's own
   header comment; re-check those if a future export reshuffles columns.
-- **`scripts/convert-app-catalogue.py`** — converts a raw "App Catalogue"
-  Google Sheet export (`.xlsx`) into a `push-app-stats.mjs` input file. Reads
+- **`scripts/convert-app-catalogue.py`** — converts a raw App Catalogue
+  export (`.xlsx`) into a `push-app-stats.mjs` input file. Reads
   **only** the "Summary" and "Trends" sheets — every other sheet in that
   workbook (per-app and per-developer detail) is outside what's been cleared
   for publication on this dashboard, and the script never opens them. Also
@@ -72,9 +72,8 @@ node scripts/push-products.mjs input/products/<quarter>.js
 # Fonts:
 node scripts/import-font-stats.mjs "<path to CSV>"
 
-# Apps: convert that month's App Catalogue export (the "App Catalogue (SIL and
-# partners internal use only)" Google Sheet, downloaded as .xlsx) into an input
-# file, then push:
+# Apps: convert that month's App Catalogue export (an internal-use-only
+# spreadsheet, downloaded as .xlsx) into an input file, then push:
 py -3 scripts/convert-app-catalogue.py "<path to the App Catalogue export>"
 node scripts/push-app-stats.mjs input/apps/<YYYY-MM>.js
 ```
@@ -125,7 +124,7 @@ works locally once step 3 is done.
   (SIL-internal data) — never commit anything under it.
 - Product data excludes the sheet's "Fonts" section and any placeholder rows with
   no dev status and no metrics ever recorded.
-- The App Catalogue is marked "SIL and partners internal use only." Only its
+- The App Catalogue export is for SIL and partners' internal use only. Only its
   "Summary" and "Trends" sheets are cleared for publication on this dashboard —
   `convert-app-catalogue.py` never reads any other sheet in that workbook.
 
