@@ -13,7 +13,7 @@ export default async function handler(request) {
     request,
     Response.json({
       name: "langtech-metrics API",
-      endpoints: ["/api/products", "/api/fonts"],
+      endpoints: ["/api/products", "/api/fonts", "/api/apps"],
     }),
   );
 }
