@@ -28,10 +28,10 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   several weekly snapshots) and pushes it to the store, keeping only one
   snapshot per calendar month (the latest date with stats in that month) and
   removing any superseded date no longer kept.
-- **`scripts/convert-dashboard-export.py`** — converts a raw "LangTech
-  Analytics Dashboard" Google Sheet export (`.xlsx`) into a
-  `push-products.mjs` input file, so quarterly product data doesn't need to be
-  hand-transcribed. Requires `openpyxl` (`py -3 -m pip install openpyxl`) —
+- **`scripts/convert-dashboard-export.py`** — converts the raw quarterly
+  product-tracking Google Sheet export (`.xlsx`) into a `push-products.mjs`
+  input file, so quarterly product data doesn't need to be hand-transcribed.
+  Requires `openpyxl` (`py -3 -m pip install openpyxl`) —
   not a project dependency, since it only ever runs by hand. The column
   layout and row-inclusion rule it encodes are documented in the script's own
   header comment; re-check those if a future export reshuffles columns.
@@ -53,8 +53,8 @@ plus the catalog — they never reload the store's other history:
 ```
 vercel login   # once
 
-# Products: convert that quarter's dashboard export (the "LangTech Analytics
-# Dashboard" Google Sheet, downloaded as .xlsx) into an input file, then push:
+# Products: convert that quarter's product-tracking spreadsheet export
+# (downloaded as .xlsx) into an input file, then push:
 py -3 scripts/convert-dashboard-export.py "<path to the quarter's .xlsx export>" <quarter>
 node scripts/push-products.mjs input/products/<quarter>.js
 
