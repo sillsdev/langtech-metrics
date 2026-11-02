@@ -104,6 +104,12 @@ EXCLUDED_PRODUCTS = {
     "Keyboard App Builder",
 }
 
+# Renames a Category value from the spreadsheet (which we don't control) to
+# what the dashboard should actually show.
+CATEGORY_RENAMES = {
+    "Language Audio/Documentation": "Language Audio",
+}
+
 
 def header_map(ws, row):
     headers = {}
@@ -265,6 +271,7 @@ def main():
         category = product_list.cell(row=row, column=pl["category"]).value
         if not category:
             continue  # section headers, "further consideration" block
+        category = CATEGORY_RENAMES.get(category, category)
         if category == "Fonts":
             continue  # fonts have their own Font Usage section, fed by import-font-stats.mjs
         if name in EXCLUDED_PRODUCTS:
