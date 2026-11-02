@@ -8,10 +8,10 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
 ## Layout
 
 - **`api/`** — the read API, deployed as Vercel Edge Functions.
-  - `products.js`, `fonts.js` — one file per route (`GET /api/products`,
-    `GET /api/fonts`), each Vercel's file-based routing turns into its own
-    endpoint. Every response gets `Access-Control-Allow-Origin` (echoed from a
-    small allow-list — the production site plus its local dev origins).
+  - `products.js`, `fonts.js`, `apps.js` — one file per route (`GET /api/products`,
+    `GET /api/fonts`, `GET /api/apps`), each Vercel's file-based routing turns into
+    its own endpoint. Every response gets `Access-Control-Allow-Origin` (echoed from
+    a small allow-list — the production site plus its local dev origins).
   - `root.js` — a small self-describing JSON directory (name + endpoint list).
     `vercel.json` rewrites the bare domain root (`/`) to it, so a health check or
     anyone hitting the domain directly gets that instead of a bare 404.
@@ -35,6 +35,17 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   not a project dependency, since it only ever runs by hand. The column
   layout and row-inclusion rule it encodes are documented in the script's own
   header comment; re-check those if a future export reshuffles columns.
+- **`scripts/convert-app-catalogue.py`** — converts a raw "App Catalogue"
+  Google Sheet export (`.xlsx`) into a `push-app-stats.mjs` input file. Reads
+  **only** the "Summary" and "Trends" sheets — every other sheet in that
+  workbook (per-app and per-developer detail) is outside what's been cleared
+  for publication on this dashboard, and the script never opens them. Also
+  requires `openpyxl`; see the script's own header comment for the sheet
+  layout and the rule for dropping a not-yet-updated trailing Trends point.
+- **`scripts/push-app-stats.mjs`** — pushes one month's App Usage data (from a
+  file matching `convert-app-catalogue.py`'s output shape) to the store,
+  merging its Scripture install trend into the one already there (one point
+  per calendar month, same keep-latest rule as `import-font-stats.mjs`).
 
 ## Populating data
 
@@ -60,6 +71,12 @@ node scripts/push-products.mjs input/products/<quarter>.js
 
 # Fonts:
 node scripts/import-font-stats.mjs "<path to CSV>"
+
+# Apps: convert that month's App Catalogue export (the "App Catalogue (SIL and
+# partners internal use only)" Google Sheet, downloaded as .xlsx) into an input
+# file, then push:
+py -3 scripts/convert-app-catalogue.py "<path to the App Catalogue export>"
+node scripts/push-app-stats.mjs input/apps/<YYYY-MM>.js
 ```
 
 ## Running it locally
@@ -103,11 +120,14 @@ works locally once step 3 is done.
 
 ## Data notes
 
-- `input/` holds raw source exports (font CSVs, per-quarter product input files)
-  used to populate the store. Gitignored entirely (SIL-internal data) — never
-  commit anything under it.
+- `input/` holds raw source exports (font CSVs, per-quarter product input files,
+  App Catalogue exports) used to populate the store. Gitignored entirely
+  (SIL-internal data) — never commit anything under it.
 - Product data excludes the sheet's "Fonts" section and any placeholder rows with
   no dev status and no metrics ever recorded.
+- The App Catalogue is marked "SIL and partners internal use only." Only its
+  "Summary" and "Trends" sheets are cleared for publication on this dashboard —
+  `convert-app-catalogue.py` never reads any other sheet in that workbook.
 
 ## TODO
 
