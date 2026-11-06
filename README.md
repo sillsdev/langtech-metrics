@@ -29,6 +29,12 @@ API for LangTech tools usage metrics, consumed by the `/impact` dashboard on
   Reader/BloomPUB Viewer under "Bloom"). Edit its `SUITES` mapping and re-run;
   independent of the quarterly push, which would otherwise wipe this field
   (see the script's own header comment for why).
+- **`scripts/set-discontinued-products.mjs`** — hand-maintained patch for a
+  product that's stopped reporting for good (as opposed to one quarter's data
+  simply not being in yet): hides it from the dashboard from a given quarter
+  onward while keeping its earlier quarters' history intact. Edit its
+  `DISCONTINUED` mapping and re-run; same independent-of-the-quarterly-push
+  reasoning as `set-product-suites.mjs` above.
 - **`scripts/import-font-stats.mjs`** — parses a CSV export (which may contain
   several weekly snapshots) and pushes it to the store, keeping only one
   snapshot per calendar month (the latest date with stats in that month) and
@@ -85,6 +91,9 @@ node scripts/push-app-stats.mjs input/apps/<YYYY-MM>.js
 # Product suites (only needed when SUITES in the script changes, or after a
 # quarterly push touches a grouped product -- see the script's own comment):
 node scripts/set-product-suites.mjs
+
+# Discontinued products (only needed when DISCONTINUED in the script changes):
+node scripts/set-discontinued-products.mjs
 ```
 
 ## Running it locally
