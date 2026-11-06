@@ -15,6 +15,14 @@
 // together) -- that's hand-maintained separately by
 // scripts/set-product-suites.mjs, independent of the quarterly spreadsheet,
 // and this push would wipe it since it isn't part of this object.
+//
+// Likewise, don't add a "discontinuedAsOf" field here -- that's hand-maintained
+// by scripts/set-discontinued-products.mjs, for a product that's stopped
+// reporting for good and should disappear from the dashboard from a given
+// quarter onward while keeping its earlier quarters' history intact. Simply
+// leaving a product out of this file's `products` list only stops this one
+// quarter's metrics from updating -- it still shows up every quarter as a
+// permanent "no data" row until discontinuedAsOf is set.
 
 export default {
   quarter: "FY99Q9",

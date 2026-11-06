@@ -46,9 +46,22 @@ function isPending(productMetrics) {
   return CORE_METRIC_KEYS.every((key) => productMetrics[key] == null);
 }
 
+// A product discontinued as of some quarter (see scripts/set-discontinued-products.mjs)
+// stays in catalog.products -- its metadata and earlier metrics are still real history
+// -- but shouldn't appear from that quarter onward. Quarter order comes from
+// catalog.quarters' push order (same assumption `quarters[quarters.length - 1]` above
+// already makes for "latest").
+function isVisibleInQuarter(product, catalog, quarterIndex) {
+  if (!product.discontinuedAsOf) return true;
+  const discontinuedIndex = catalog.quarters.indexOf(product.discontinuedAsOf);
+  return discontinuedIndex === -1 || quarterIndex < discontinuedIndex;
+}
+
 function shapeResponse(catalog, quarter, quarterDoc) {
   const metricsByName = quarterDoc?.metrics ?? {};
-  const complete = quarterDoc?.complete ?? catalog.products.every((p) => !isPending(metricsByName[p.name]));
+  const quarterIndex = catalog.quarters.indexOf(quarter);
+  const visibleProducts = catalog.products.filter((p) => isVisibleInQuarter(p, catalog, quarterIndex));
+  const complete = quarterDoc?.complete ?? visibleProducts.every((p) => !isPending(metricsByName[p.name]));
   return {
     generatedAt: quarterDoc?.generatedAt ?? catalog.generatedAt,
     quarter,
@@ -57,6 +70,6 @@ function shapeResponse(catalog, quarter, quarterDoc) {
     categories: catalog.categories,
     platforms: catalog.platforms,
     devStatuses: catalog.devStatuses,
-    products: catalog.products.map((p) => ({ ...p, metrics: metricsByName[p.name] ?? {} })),
+    products: visibleProducts.map((p) => ({ ...p, metrics: metricsByName[p.name] ?? {} })),
   };
 }
